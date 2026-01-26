@@ -16,151 +16,140 @@
 
 ---
 
-## 环境隔离原理
+## 脚本工作原理
 
-### 为什么要隔离？
-
-1. **Haiku 会修改文件**
-   - Edit 工具会修改配置文件
-   - 修改会污染原始环境
-
-2. **需要保留原始环境**
-   - 你需要原始的 environment 来保存题目
-   - 原始的 case.json 包含答案，不能被 Haiku 看到
-
-3. **防止泄露答案**
-   - case.json 包含 reference_solution（答案）
-   - 如果 Haiku 能读取 case.json，就能作弊
-
-### 隔离方案
-
-在工作目录下创建 `haiku_space/` 子目录：
+`phase6_haiku.py` 脚本会自动完成以下步骤：
 
 ```
-/tmp/workspace/
-├── config/                   # 原始环境（保留）
-├── logs/
-├── docs/
-├── case.json                 # 包含答案（不复制到 haiku_space）
-├── phase4_result.json
+/tmp/workspace/              # 出题 CC 工作目录
+├── case.json                # 包含答案，Haiku 看不到
+├── phase6_result.json       # 验证结果（脚本生成）
 │
-└── haiku_space/              # Haiku 工作目录（隔离）
-    ├── config/               # 复制的环境文件
+└── haiku_space/             # 脚本创建的隔离目录
+    ├── config/              # 根据 environment 创建
     ├── logs/
-    ├── docs/
-    └── phase6_result.json    # Haiku 验证结果
+    ├── services/
+    └── (Haiku 在这里工作)
 ```
 
-**关键点**：
-- ✅ 复制环境文件到 `haiku_space/`
-- ❌ **不要**复制 `case.json`（包含答案）
-- ✅ Haiku 工作目录设置为 `haiku_space/`
-- ✅ Haiku 只能看到和修改 `haiku_space/` 内的文件
+**关键隔离机制**：
+1. 脚本从 `case.json` 读取 environment 和 init_commands
+2. 在 `haiku_space/` 中创建环境文件
+3. **执行 init_commands**（KillShell 场景必需！）
+4. **cd 到 `haiku_space/` 后调用 Haiku CLI**
+5. Haiku 的工作目录是 `haiku_space/`，看不到外面的 `case.json`
+6. 验证 graders 并保存结果
 
 ---
 
 ## 执行步骤
 
-### Step 1: 准备 Haiku 环境
+### Step 1: 确保 case.json 已保存
 
-创建 `haiku_space/` 子目录并复制环境文件：
+确保测试用例已保存为 `case.json`：
 
-```bash
-# 创建隔离目录
-mkdir -p haiku_space
-
-# 复制所有环境文件
-cp -r config/ haiku_space/
-cp -r logs/ haiku_space/
-cp -r docs/ haiku_space/
-cp -r services/ haiku_space/
-# ... 复制所有环境目录和文件
+```json
+{
+  "task": {"id": "...", "desc": "..."},
+  "environment": [...],
+  "init_commands": [...],  // KillShell 场景必须
+  "reference_solution": [...],
+  "graders": [...]
+}
 ```
 
-**⚠️ 重要**：
-- ✅ 复制 environment 中列出的所有文件和目录
-- ❌ **不要**复制 `case.json`（包含答案）
-- ❌ **不要**复制 `phase4_result.json`（验证结果）
-
-### Step 2: 调用 Haiku 验证脚本
-
-使用绝对路径调用验证脚本：
+### Step 2: 执行 Haiku 验证脚本
 
 ```bash
-python3 ~/.claude/skills/agent-testcase-generator/scripts/phase6_haiku.py case.json --haiku-dir haiku_space/
+python3 ~/.claude/skills/agent-testcase-generator/scripts/phase6_haiku.py case.json
 ```
 
 **脚本会自动**：
-1. 读取 case.json（从工作目录根）
-2. 提取 Query（task.desc）
-3. 进入 haiku_space/ 目录
-4. 调用 Haiku CLI，只给 Query，不给答案
-5. Haiku 在 haiku_space/ 中探索和解题
-6. 捕获 Haiku 的真实工具调用轨迹
-7. 用 graders 验证 haiku_space/ 的状态
-8. 保存结果到 `haiku_space/phase6_result.json`
+1. 创建 `haiku_space/` 目录
+2. 根据 `environment` 创建文件
+3. 执行 `init_commands`（启动后台进程等）
+4. cd 到 `haiku_space/`，调用 Haiku CLI
+5. 捕获 Haiku 的工具调用轨迹
+6. 验证 graders
+7. 保存结果到 `phase6_result.json`
 
-**执行时间**：通常需要 30-120 秒，取决于题目复杂度
+**执行时间**：通常需要 30-120 秒，取决于题目复杂度。
 
-### Step 3: 等待脚本完成
+### Step 3: 查看输出
 
 脚本会输出实时进度：
 
 ```
-=== Phase 6 Haiku 验证开始 ===
-准备 Haiku 环境: /tmp/workspace/haiku_space/
-Haiku 工作目录: /tmp/workspace/haiku_space/
-调用 Haiku CLI...
-Query: "订单服务数据库连接超时，请排查配置问题"
-Haiku 执行中...
-  Step 1: Read logs/error.log
-  Step 2: Grep timeout
-  Step 3: Read docs/incident-2847.md
-  Step 4: Read config/database.yaml
-  Step 5: Edit config/database.yaml
-Haiku 执行完成，共 5 步
-验证 Graders...
-  state_check: 3/3 通过 ✓
-  tool_calls: 1/1 通过 ✓
-=== Phase 6 验证通过 ===
-结果已保存: /tmp/workspace/haiku_space/phase6_result.json
+============================================================
+Phase 6: Haiku 验证
+============================================================
+Case ID: KillShell_D4_20260126
+Query: 系统中存在一个占用资源的后台同步进程，请找到并停止它...
+Working directory: /tmp/workspace
+Haiku directory: /tmp/workspace/haiku_space
+
+--- Setting up Haiku environment ---
+  Created 8 environment files
+  Executing 1 init commands...
+    - 启动 legacy_sync 后台进程
+
+--- Running Haiku validation ---
+This may take a few minutes...
+Execution completed in 45.2s
+Total steps: 6
+
+--- Verifying Graders ---
+  ✓ [bash_process_not_running] Process legacy_sync not running
+  ✓ [file_not_exists] File logs/legacy_sync.pid does not exist
+
+--- Tool Calls ---
+  ✓ KillShell: 必须使用 KillShell 工具
+
+============================================================
+✓ Phase 6 PASSED - Haiku completed the task
+  Checks: 2/2 passed
+  Haiku steps: 6
+  Duration: 45.2s
+============================================================
+
+Result saved to: /tmp/workspace/phase6_result.json
 ```
 
 ### Step 4: 读取验证结果
 
 ```bash
-Read haiku_space/phase6_result.json
+Read phase6_result.json
 ```
 
 **结果结构**：
 ```json
 {
-  "passed": true,
-  "haiku_steps": 5,
-  "duration_sec": 45,
-  "haiku_evaluation": {
-    "passed": true,
-    "haiku_steps": 5,
-    "duration_sec": 45,
-    "passed_checks": 4,
-    "total_checks": 4
-  },
+  "phase": 6,
+  "case_id": "KillShell_D4_20260126",
+  "timestamp": "2026-01-26T15:30:00",
   "haiku_execution": {
+    "success": true,
+    "total_steps": 6,
+    "duration_sec": 45.2,
     "trajectory": [
-      {
-        "step": 1,
-        "tool": "Read",
-        "input": {"file_path": "logs/error.log"},
-        "output": "Connection refused on port 5432\nDatabase: db-prod-01\n..."
-      },
-      {
-        "step": 2,
-        "tool": "Grep",
-        "input": {"pattern": "timeout", "output_mode": "files_with_matches"},
-        "output": "config/database.yaml\ndocs/incident-2847.md"
-      },
+      {"step": 1, "tool": "Glob", "input": {...}, "output": "..."},
+      {"step": 2, "tool": "Read", "input": {...}, "output": "..."},
       ...
     ]
+  },
+  "grader_result": {
+    "passed": true,
+    "total_checks": 2,
+    "passed_checks": 2,
+    "failed_checks": 0,
+    "tool_calls_verified": true
+  },
+  "haiku_evaluation": {
+    "passed": true,
+    "haiku_steps": 6,
+    "duration_sec": 45.2,
+    "passed_checks": 2,
+    "total_checks": 2
   }
 }
 ```
@@ -169,42 +158,56 @@ Read haiku_space/phase6_result.json
 
 **🚨 强制要求**：必须原封不动复制 `haiku_trajectory`
 
-从 `phase6_result.json` 中提取以下字段，复制到最终的 `case.json`：
+从 `phase6_result.json` 提取以下字段，复制到最终的 `case.json`：
 
-1. **haiku_evaluation**：
-   ```json
-   "haiku_evaluation": {
-     "passed": true,
-     "haiku_steps": 5,
-     "duration_sec": 45,
-     "passed_checks": 4,
-     "total_checks": 4
-   }
-   ```
-
-2. **haiku_trajectory**（从 `haiku_execution.trajectory` 复制）：
-   ```json
-   "haiku_trajectory": [
-     {
-       "step": 1,
-       "tool": "Read",
-       "input": {"file_path": "logs/error.log"},
-       "output": "完整的原始工具输出（最多500字符）"
-     },
-     ...
-   ]
-   ```
+1. **haiku_evaluation**
+2. **haiku_trajectory**（从 `haiku_execution.trajectory` 复制）
 
 **⚠️ 严禁**：
 - ❌ 编造轨迹数据
-- ❌ 总结或改写 output（必须是原始输出）
-- ❌ 添加 reasoning 字段（真实轨迹没有这个字段）
+- ❌ 总结或改写 output
+- ❌ 添加 reasoning 字段
 - ❌ 简化或省略任何步骤
 
-**验证真实性**：
-- ✅ output 是完整的原始工具返回（可能被截断到 500 字符）
-- ✅ 没有 reasoning 字段
-- ✅ 与 phase6_result.json 中的数据完全一致
+---
+
+## 脚本参数
+
+| 参数 | 说明 | 示例 |
+|------|------|------|
+| `case_file` | 测试用例 JSON 文件路径（必需） | `case.json` |
+| `--haiku-dir` | Haiku 工作目录名（默认: haiku_space） | `--haiku-dir my_haiku` |
+| `--timeout` | Haiku 执行超时秒数（默认: 600） | `--timeout 300` |
+| `--output` | 输出结果文件路径 | `--output result.json` |
+| `-v, --verbose` | 详细输出 | `-v` |
+
+**完整示例**：
+```bash
+python3 ~/.claude/skills/agent-testcase-generator/scripts/phase6_haiku.py case.json --timeout 300 -v
+```
+
+---
+
+## KillShell 场景特别说明
+
+KillShell 场景需要 `init_commands` 来启动后台进程：
+
+```json
+{
+  "init_commands": [
+    {
+      "command": "nohup bash services/legacy_sync.sh > logs/legacy_sync.log 2>&1 & echo $! > logs/legacy_sync.pid",
+      "description": "启动 legacy_sync 后台进程",
+      "wait_sec": 2
+    }
+  ]
+}
+```
+
+脚本会在 `haiku_space/` 中自动执行这些命令，确保：
+1. 后台进程在 Haiku 开始工作前已启动
+2. Haiku 可以找到并停止该进程
+3. Grader 可以验证进程已停止
 
 ---
 
@@ -219,8 +222,6 @@ haiku_steps: 5（接近 Golden Action 的 5 步）
 
 **结论**：题目合理，难度适中
 
-**下一步**：完成最终输出
-
 ### 情况 2：Haiku 通过，步数太少
 
 ```
@@ -231,18 +232,11 @@ haiku_steps: 2（Golden Action 是 5 步）
 **原因**：题目太简单，信息不够分散
 
 **回炉策略**：
-- 增加信息分散度（将答案藏在更多文件中）
+- 增加信息分散度
 - 添加更多干扰文件
 - 调整 Query 模糊度
 
-**限制**：只回炉一次，不管结果如何都要输出
-
 ### 情况 3：Haiku 失败，环境/Query 问题
-
-```
-passed: false
-原因：Haiku 找不到关键信息，或 Query 有歧义
-```
 
 **判断是否是出题问题**：
 - Query 是否有歧义？
@@ -254,142 +248,53 @@ passed: false
 - 补充环境线索
 - 调整 Grader 验证条件
 
-**限制**：只回炉一次
-
 ### 情况 4：Haiku 失败，能力不足
 
-```
-passed: false
-原因：Haiku 能力不足，无法完成高难度题目（D5+）
-```
-
-**结论**：可接受，这是正常的
-
-**说明**：
-- D5+ 题目本来就是为强模型设计的
-- Haiku 失败说明题目有一定难度
-- 关键是题目设计是否合理，而不是 Haiku 是否通过
-
----
-
-## 回炉修复（如需要）
-
-### 何时回炉
-
-以下情况需要回炉：
-- Haiku 通过但步数明显太少（说明太简单）
-- Haiku 失败且原因是 Query 歧义或环境问题
-- Grader 过严导致合理解法无法通过
-
-### 回炉限制
-
-**只能回炉一次**，不管结果如何都要输出最终数据。
-
-### 可以修改的部分
-
-回炉时**可以**修改：
-
-1. **Query**
-   - 修复歧义
-   - 调整模糊度
-
-2. **Grader**
-   - 调整验证条件
-   - 允许合理的替代方案
-
-3. **Environment 内容**
-   - 增加信息分散度
-   - 添加更多干扰文件
-   - 调整线索的隐藏程度
-
-### 不能修改的部分
-
-**不能**修改：
-
-1. **Environment 结构**
-   - 不能删除核心文件
-   - 不能大改目录结构
-
-2. **Golden Action**
-   - 不能改变解题思路
-   - 不能减少步骤数
-
-### 回炉后重新验证
-
-修复后，重新执行 Step 1-5。
+**结论**：对于 D5+ 题目，这是可接受的
 
 ---
 
 ## 常见问题
 
-### Q1: 为什么不能复制 case.json？
+### Q1: init_commands 没有执行？
 
-**原因**：case.json 包含答案（reference_solution 和 graders）
+检查 `case.json` 中 `init_commands` 格式是否正确：
 
-如果 Haiku 能读取 case.json，就能：
-- 看到 Golden Action（参考解答）
-- 看到 Grader 验证条件
-- 直接作弊
-
-### Q2: 如何确保 Haiku 看不到答案？
-
-**方案**：
-1. 只复制环境文件到 haiku_space/
-2. 不复制 case.json
-3. 脚本只给 Haiku 提供 Query
-4. Haiku 工作目录设置为 haiku_space/
-
-### Q3: Haiku 修改了文件怎么办？
-
-**没关系**：
-- Haiku 只修改 haiku_space/ 中的文件
-- 工作目录根的原始环境不受影响
-- 你仍然可以保存完整的题目
-
-### Q4: 如何验证轨迹是真实的？
-
-**检查**：
-- output 字段是完整的原始输出（不是摘要）
-- 没有 reasoning 字段（真实轨迹没有）
-- 数据与 phase6_result.json 完全一致
-
-### Q5: Haiku 超时或执行很久
-
-**原因**：题目太复杂，Haiku 在探索中循环
-
-**处理**：
-- 检查 Query 是否有明确的探索方向
-- 确认环境中有足够的线索
-- 考虑降低难度
-
----
-
-## 脚本详细参数
-
-phase6_haiku.py 支持以下参数：
-
-| 参数 | 说明 | 示例 |
-|------|------|------|
-| `case_json_path` | 测试用例 JSON 文件路径（必需） | `case.json` 或绝对路径 |
-| `--haiku-dir` | Haiku 工作目录（必需） | `haiku_space/` |
-| `-v, --verbose` | 详细输出模式 | `--verbose` |
-| `--timeout` | Haiku 执行超时（秒） | `--timeout 180` |
-
-**完整示例**：
-```bash
-python3 ~/.claude/skills/agent-testcase-generator/scripts/phase6_haiku.py case.json --haiku-dir haiku_space/ --verbose --timeout 120
+```json
+{
+  "init_commands": [
+    {
+      "command": "...",
+      "description": "...",
+      "wait_sec": 2
+    }
+  ]
+}
 ```
 
-**详细参数说明**：
+### Q2: Haiku 看到了 case.json？
+
+不可能。脚本将 Haiku 的工作目录设置为 `haiku_space/`，该目录中不包含 `case.json`。
+
+### Q3: 进程没有启动成功？
+
+检查脚本输出中的 Warning 信息。常见原因：
+- 脚本文件不存在
+- 脚本没有执行权限（需要 `executable: true`）
+- `wait_sec` 设置太短
+
+### Q4: Haiku 超时？
+
+增加超时时间：
 ```bash
-Read ~/.claude/skills/agent-testcase-generator/reference/script_usage.md
+python3 phase6_haiku.py case.json --timeout 900
 ```
 
 ---
 
 ## 下一步
 
-完成 Haiku 验证后，进行最终输出：
+完成 Haiku 验证后：
 
 1. 将 `haiku_evaluation` 和 `haiku_trajectory` 添加到 case.json
 2. 添加 `quality_analysis`（可使用 phase7_quality.py）

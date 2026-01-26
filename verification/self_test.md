@@ -14,6 +14,10 @@
 - 确保 Grader 验证逻辑正确
 - 发现设计问题，及时修复
 
+**与 Haiku 验证的区别**：
+- 自测：按 reference_solution 执行，**不调用 AI 模型**，快速（几秒）
+- Haiku 验证：Haiku 模型自己探索执行，慢（几分钟）
+
 ---
 
 ## 前置条件
@@ -34,7 +38,7 @@
 {
   "task": {...},
   "environment": [...],
-  "init_commands": [...],  // 可选
+  "init_commands": [...],  // 可选，KillShell 场景必须
   "reference_solution": [...],
   "graders": [...]
 }
@@ -42,49 +46,77 @@
 
 ### Step 2: 执行验证脚本
 
-使用绝对路径调用验证脚本：
-
 ```bash
 python3 ~/.claude/skills/agent-testcase-generator/scripts/phase4_verify.py case.json
 ```
 
 **脚本会自动**：
-1. 读取 case.json
-2. 在工作目录的一个隔离子目录中创建环境
-3. 执行 init_commands（如果有）
-4. 逐步执行 reference_solution 中的每一步
-5. 验证所有 graders
+1. 创建 `phase4_workspace/` 子目录
+2. 根据 `environment` 创建文件
+3. 执行 `init_commands`（如果有）
+4. 按 `reference_solution` 逐步执行
+5. 验证所有 `graders`
 6. 输出详细结果
+7. 清理工作目录（除非使用 `--keep-env`）
 
 ### Step 3: 查看结果
 
-脚本会输出到终端，并保存到工作目录的 `phase4_result.json`。
+脚本会输出到终端，并保存到 `phase4_result.json`。
 
 **成功示例**：
 ```
-=== Phase 4 验证开始 ===
-创建验证环境: /tmp/workspace/phase4_verify_abc123/
-执行环境初始化...
-执行 Golden Action...
-  Step 1/4: Read logs/error.log ✓
-  Step 2/4: Grep timeout ✓
-  Step 3/4: Read docs/incident-2847.md ✓
-  Step 4/4: Edit config/database.yaml ✓
-验证 Graders...
-  state_check: 3/3 通过 ✓
-  tool_calls: 1/1 通过 ✓
-=== Phase 4 验证通过 ===
+============================================================
+Phase 4: 自测验证
+============================================================
+Case ID: Edit_D4_20260126
+Tool: Edit, Difficulty: D4
+Environment files: 12
+Reference solution steps: 5
+Work directory: /tmp/workspace/phase4_workspace
+
+--- Setting up workspace ---
+  Created 12 environment files
+  Executing 1 init commands...
+    - 启动后台服务
+
+--- Executing Reference Solution ---
+  ✓ Step 1: Read - Read 1523 chars from logs/error.log
+  ✓ Step 2: Grep - Grep executed (exploration)
+  ✓ Step 3: Read - Read 892 chars from docs/incident-2847.md
+  ✓ Step 4: Read - Read 456 chars from config/database.yaml
+  ✓ Step 5: Edit - Edited config/database.yaml
+
+--- Verifying Graders ---
+  ✓ [file_content_contains] keyword 'timeout: 47000' found in config/database.yaml
+  ✓ [file_content_not_contains] keyword 'timeout: 5000' correctly not in config/database.yaml
+
+--- Tool Calls ---
+  ✓ Edit: 必须使用 Edit 工具修改配置
+
+============================================================
+✓ Phase 4 PASSED
+  Checks: 2/2 passed
+  Tool calls verified: True
+============================================================
+
+Result saved to: /tmp/workspace/phase4_result.json
+Cleaned up: /tmp/workspace/phase4_workspace
 ```
 
 **失败示例**：
 ```
-=== Phase 4 验证开始 ===
-...
-执行 Golden Action...
-  Step 1/4: Read logs/error.log ✓
-  Step 2/4: Grep timeout ✗
-    错误: 文件不存在: config/database.yaml
-=== Phase 4 验证失败 ===
+--- Executing Reference Solution ---
+  ✓ Step 1: Read - Read 1523 chars from logs/error.log
+  ✗ Step 2: Edit - File not found: config/database.yaml
+
+--- Verifying Graders ---
+  ✗ [file_content_contains] file not found: config/database.yaml
+
+============================================================
+✗ Phase 4 FAILED
+  Checks: 0/2 passed
+  Tool calls verified: True
+============================================================
 ```
 
 ### Step 4: 读取详细结果
@@ -96,22 +128,41 @@ Read phase4_result.json
 **结果结构**：
 ```json
 {
+  "phase": 4,
+  "case_id": "Edit_D4_20260126",
+  "timestamp": "2026-01-26T14:30:00",
   "passed": true,
-  "golden_action_result": {
-    "all_steps_passed": true,
-    "steps": [
-      {"step": 1, "tool": "Read", "passed": true, "error": null},
-      {"step": 2, "tool": "Grep", "passed": true, "error": null},
-      ...
-    ]
-  },
+  "execution_trajectory": [
+    {"step": 1, "tool": "Read", "success": true, "output": "..."},
+    {"step": 2, "tool": "Grep", "success": true, "output": "..."},
+    ...
+  ],
   "grader_result": {
-    "all_passed": true,
-    "state_check": {"passed": 3, "total": 3},
-    "tool_calls": {"passed": 1, "total": 1},
+    "passed": true,
+    "total_checks": 2,
+    "passed_checks": 2,
+    "failed_checks": 0,
+    "tool_calls_verified": true,
     "details": [...]
   }
 }
+```
+
+---
+
+## 脚本参数
+
+| 参数 | 说明 | 示例 |
+|------|------|------|
+| `case_file` | 测试用例 JSON 文件路径（必需） | `case.json` |
+| `--work-dir` | 工作目录名（默认: phase4_workspace） | `--work-dir my_test` |
+| `--output` | 输出结果文件路径 | `--output result.json` |
+| `--keep-env` | 保留工作环境（不删除） | `--keep-env` |
+| `-v, --verbose` | 详细输出 | `-v` |
+
+**完整示例**：
+```bash
+python3 ~/.claude/skills/agent-testcase-generator/scripts/phase4_verify.py case.json --keep-env -v
 ```
 
 ---
@@ -122,7 +173,6 @@ Read phase4_result.json
 
 ```
 passed: true
-golden_action_result.all_steps_passed: true
 grader_result.all_passed: true
 ```
 
@@ -136,7 +186,7 @@ Read ~/.claude/skills/agent-testcase-generator/verification/haiku_verification.m
 ### 情况 2：Golden Action 失败
 
 ```
-golden_action_result.all_steps_passed: false
+execution_trajectory 中某步 success: false
 ```
 
 **常见原因**：
@@ -152,8 +202,8 @@ golden_action_result.all_steps_passed: false
 ### 情况 3：Grader 失败
 
 ```
-golden_action_result.all_steps_passed: true
-grader_result.all_passed: false
+execution_trajectory 全部 success: true
+grader_result.passed: false
 ```
 
 **常见原因**：
@@ -169,7 +219,7 @@ grader_result.all_passed: false
 ### 情况 4：Environment 缺失
 
 ```
-错误: 文件不存在: logs/error.log
+Step X: File not found: some/path.yaml
 ```
 
 **原因**：environment 中缺少 Golden Action 引用的文件
@@ -216,73 +266,13 @@ grader_result.all_passed: false
 
 ### 修复后重新验证
 
-修复后，重新执行 Step 2：
+修复后，重新执行验证：
 
 ```bash
 python3 ~/.claude/skills/agent-testcase-generator/scripts/phase4_verify.py case.json
 ```
 
 重复此过程，直到验证通过。
-
----
-
-## 常见问题
-
-### Q1: 脚本报错"找不到 case.json"
-
-**原因**：case.json 不在当前工作目录
-
-**解决**：确认 case.json 保存在工作目录根，或使用绝对路径：
-```bash
-python3 ~/.claude/skills/agent-testcase-generator/scripts/phase4_verify.py /tmp/workspace/case.json
-```
-
-### Q2: Golden Action 某一步失败
-
-**解决步骤**：
-1. 查看失败步骤的 error 信息
-2. 检查该步骤的 input 参数
-3. 确认环境中包含相关文件
-4. 手动执行该步骤测试（使用对应工具）
-
-### Q3: Grader check 一直失败
-
-**解决步骤**：
-1. 查看 grader_result.details 中的失败原因
-2. 手动检查文件内容是否符合预期
-3. 确认 keyword 或 pattern 是否正确
-4. 考虑是否需要调整 Grader 验证条件
-
-### Q4: Environment 创建失败
-
-**原因**：environment 中有非法的文件路径或内容
-
-**解决**：
-- 检查路径中是否有特殊字符
-- 确认 content 字段格式正确（使用 \n 表示换行）
-- 确认 executable 字段是布尔值
-
----
-
-## 脚本详细参数
-
-phase4_verify.py 支持以下参数：
-
-| 参数 | 说明 | 示例 |
-|------|------|------|
-| `case_json_path` | 测试用例 JSON 文件路径（必需） | `case.json` 或绝对路径 |
-| `-v, --verbose` | 详细输出模式 | `--verbose` |
-| `--keep-env` | 保留验证环境（不删除） | `--keep-env` |
-
-**完整示例**：
-```bash
-python3 ~/.claude/skills/agent-testcase-generator/scripts/phase4_verify.py case.json --verbose --keep-env
-```
-
-**详细参数说明**：
-```bash
-Read ~/.claude/skills/agent-testcase-generator/reference/script_usage.md
-```
 
 ---
 

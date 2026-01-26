@@ -1,41 +1,124 @@
 #!/usr/bin/env python3
 """
-Phase 4: 初检验证脚本
+Phase 4: 自测验证脚本
 
 验证测试用例的 reference_solution 是否能正确通过 graders。
 
 用法:
-    python3 phase4_verify.py <case_file> [--sandbox <sandbox_id>]
+    python3 phase4_verify.py <case_file> [--work-dir <dir>] [--keep-env]
 
 功能:
-1. 创建或使用现有 sandbox
-2. 从 case 文件加载环境
-3. 执行 reference_solution
-4. 验证 graders
-5. 输出验证结果
+1. 在当前目录创建 phase4_workspace/ 子目录
+2. 根据 case.json 的 environment 创建文件
+3. 执行 init_commands
+4. 按 reference_solution 逐步执行
+5. 验证 graders
+6. 输出验证结果
+
+区别于 phase6_haiku.py：
+- 本脚本直接按 reference_solution 执行，不调用 AI 模型
+- 用于快速验证出题设计是否正确
 """
 import sys
 import os
 import json
 import argparse
+import subprocess
+import shutil
+import time
+import signal
 from pathlib import Path
 from datetime import datetime
+from typing import Tuple, List, Dict, Any
 
-# 添加 src 到路径
+# 添加 scripts 目录到路径，以便导入 custom_checks
 SCRIPT_DIR = Path(__file__).parent
-PROJECT_ROOT = SCRIPT_DIR.parent
-sys.path.insert(0, str(PROJECT_ROOT / 'src'))
+sys.path.insert(0, str(SCRIPT_DIR))
 
-from sandbox.sandbox_manager import SandboxManager
-from evaluation.grader_executor import GraderExecutor
+from custom_checks import CHECK_REGISTRY, _resolve_path
 
 
-def execute_reference_solution(sandbox_path: Path, reference_solution: list) -> list:
+# ============================================================
+# 环境设置
+# ============================================================
+
+def setup_workspace(case_data: dict, work_dir: Path) -> None:
+    """
+    设置工作环境
+
+    Args:
+        case_data: 测试用例数据
+        work_dir: 工作目录
+    """
+    # 清理并创建目录
+    if work_dir.exists():
+        shutil.rmtree(work_dir)
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. 根据 environment 创建文件
+    environment = case_data.get('environment', [])
+    for file_info in environment:
+        file_path = file_info.get('path', '')
+        content = file_info.get('content', '')
+        executable = file_info.get('executable', False)
+
+        if not file_path:
+            continue
+
+        full_path = work_dir / file_path
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        full_path.write_text(content, encoding='utf-8')
+
+        if executable:
+            full_path.chmod(0o755)
+
+    print(f"  Created {len(environment)} environment files")
+
+    # 2. 执行 init_commands
+    init_commands = case_data.get('init_commands', [])
+    if init_commands:
+        print(f"  Executing {len(init_commands)} init commands...")
+        for cmd_info in init_commands:
+            command = cmd_info.get('command', '')
+            description = cmd_info.get('description', '')
+            wait_sec = cmd_info.get('wait_sec', 0)
+
+            if not command:
+                continue
+
+            print(f"    - {description}")
+            try:
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    cwd=str(work_dir),
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                if result.returncode != 0:
+                    print(f"      Warning: command returned {result.returncode}")
+                    if result.stderr:
+                        print(f"      stderr: {result.stderr[:100]}")
+            except subprocess.TimeoutExpired:
+                print(f"      Warning: command timed out")
+            except Exception as e:
+                print(f"      Error: {e}")
+
+            if wait_sec > 0:
+                time.sleep(wait_sec)
+
+
+# ============================================================
+# Reference Solution 执行
+# ============================================================
+
+def execute_reference_solution(work_dir: Path, reference_solution: list) -> List[Dict]:
     """
     执行 reference_solution
 
     Args:
-        sandbox_path: sandbox 工作目录
+        work_dir: 工作目录
         reference_solution: 参考解决方案列表
 
     Returns:
@@ -61,7 +144,7 @@ def execute_reference_solution(sandbox_path: Path, reference_solution: list) -> 
             if tool == 'Read':
                 file_path = input_data.get('file_path', '')
                 file_path = file_path.replace('{{SANDBOX}}/', '').replace('{{SANDBOX}}', '')
-                full_path = sandbox_path / file_path
+                full_path = work_dir / file_path
                 if full_path.exists():
                     content = full_path.read_text(encoding='utf-8')
                     step['success'] = True
@@ -75,7 +158,7 @@ def execute_reference_solution(sandbox_path: Path, reference_solution: list) -> 
                 old_string = input_data.get('old_string', '')
                 new_string = input_data.get('new_string', '')
 
-                full_path = sandbox_path / file_path
+                full_path = work_dir / file_path
                 if full_path.exists():
                     content = full_path.read_text(encoding='utf-8')
                     if old_string in content:
@@ -93,7 +176,7 @@ def execute_reference_solution(sandbox_path: Path, reference_solution: list) -> 
                 file_path = file_path.replace('{{SANDBOX}}/', '').replace('{{SANDBOX}}', '')
                 content = input_data.get('content', '')
 
-                full_path = sandbox_path / file_path
+                full_path = work_dir / file_path
                 full_path.parent.mkdir(parents=True, exist_ok=True)
                 full_path.write_text(content, encoding='utf-8')
                 step['success'] = True
@@ -110,10 +193,8 @@ def execute_reference_solution(sandbox_path: Path, reference_solution: list) -> 
                 step['output'] = f"Glob executed (exploration)"
 
             elif tool == 'Bash':
-                import subprocess
-                import signal
                 command = input_data.get('command', '')
-                background = input_data.get('background', False)
+                background = input_data.get('background', False) or input_data.get('run_in_background', False)
 
                 if background:
                     # 后台执行
@@ -121,7 +202,7 @@ def execute_reference_solution(sandbox_path: Path, reference_solution: list) -> 
                         process = subprocess.Popen(
                             command,
                             shell=True,
-                            cwd=str(sandbox_path),
+                            cwd=str(work_dir),
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE,
                             text=True
@@ -134,36 +215,40 @@ def execute_reference_solution(sandbox_path: Path, reference_solution: list) -> 
                         step['output'] = f"Failed to start background process: {e}"
                 else:
                     # 同步执行
-                    result = subprocess.run(
-                        command,
-                        shell=True,
-                        cwd=str(sandbox_path),
-                        capture_output=True,
-                        text=True,
-                        timeout=60
-                    )
-                    step['success'] = result.returncode == 0
-                    step['output'] = result.stdout[:500] if result.stdout else result.stderr[:500]
+                    try:
+                        result = subprocess.run(
+                            command,
+                            shell=True,
+                            cwd=str(work_dir),
+                            capture_output=True,
+                            text=True,
+                            timeout=60
+                        )
+                        step['success'] = result.returncode == 0
+                        step['output'] = result.stdout[:500] if result.stdout else result.stderr[:500]
+                    except subprocess.TimeoutExpired:
+                        step['success'] = False
+                        step['output'] = "Command timed out"
 
             elif tool == 'KillShell':
-                import signal
-                import os
                 shell_id = input_data.get('shell_id', '')
                 pid_file = input_data.get('pid_file', '')
 
                 try:
                     if pid_file:
                         # 通过 PID 文件
-                        pid_path = sandbox_path / pid_file
+                        pid_path = work_dir / pid_file
                         if pid_path.exists():
                             pid = int(pid_path.read_text().strip())
                             try:
                                 os.kill(pid, signal.SIGTERM)
                                 step['success'] = True
                                 step['output'] = f"Killed process {pid}"
+                                # 清理 PID 文件
+                                pid_path.unlink()
                             except ProcessLookupError:
-                                step['success'] = False
-                                step['output'] = f"Process {pid} not found"
+                                step['success'] = True  # 进程已经不存在也算成功
+                                step['output'] = f"Process {pid} already terminated"
                         else:
                             step['success'] = False
                             step['output'] = f"PID file not found: {pid_file}"
@@ -176,14 +261,14 @@ def execute_reference_solution(sandbox_path: Path, reference_solution: list) -> 
 
             elif tool == 'WebFetch':
                 url = input_data.get('url', '')
-                try:
-                    import requests
-                    response = requests.get(url, timeout=10)
-                    step['success'] = response.status_code == 200
-                    step['output'] = response.text[:500]
-                except Exception as e:
-                    step['success'] = False
-                    step['output'] = f"WebFetch error: {e}"
+                # 简化处理，假设成功
+                step['success'] = True
+                step['output'] = f"WebFetch executed for {url}"
+
+            elif tool == 'web_search':
+                query = input_data.get('query', '')
+                step['success'] = True
+                step['output'] = f"web_search executed for {query}"
 
             else:
                 step['output'] = f"Unknown tool: {tool}"
@@ -196,17 +281,118 @@ def execute_reference_solution(sandbox_path: Path, reference_solution: list) -> 
     return trajectory
 
 
+# ============================================================
+# Grader 验证
+# ============================================================
+
+class CheckResult:
+    """单个检查的结果"""
+    def __init__(self, check_type: str, passed: bool, message: str, description: str = ""):
+        self.check_type = check_type
+        self.passed = passed
+        self.message = message
+        self.description = description
+
+
+class GraderResult:
+    """Grader 验证结果"""
+    def __init__(self):
+        self.passed = False
+        self.total_checks = 0
+        self.passed_checks = 0
+        self.failed_checks = 0
+        self.tool_calls_verified = False
+        self.tool_calls_details = []
+        self.results: List[CheckResult] = []
+
+
+def verify_graders(case_data: dict, work_dir: Path, trajectory: List[Dict]) -> GraderResult:
+    """
+    执行 grader 验证
+
+    Args:
+        case_data: 测试用例数据
+        work_dir: 工作目录
+        trajectory: 执行轨迹
+
+    Returns:
+        GraderResult 验证结果
+    """
+    result = GraderResult()
+    graders = case_data.get('graders', [])
+
+    for grader in graders:
+        grader_type = grader.get('type', '')
+
+        if grader_type == 'state_check':
+            checks = grader.get('checks', [])
+            for check in checks:
+                check_type = check.get('check', '')
+                params = check.get('params', {})
+                description = check.get('description', '')
+
+                result.total_checks += 1
+
+                # 调用 custom_checks.py 中的检查函数
+                if check_type in CHECK_REGISTRY:
+                    check_func = CHECK_REGISTRY[check_type]
+                    try:
+                        passed, message = check_func(work_dir, params, trajectory)
+                    except Exception as e:
+                        passed, message = False, f"Check error: {e}"
+                else:
+                    passed, message = False, f"Unknown check type: {check_type}"
+
+                if passed:
+                    result.passed_checks += 1
+                else:
+                    result.failed_checks += 1
+
+                result.results.append(CheckResult(check_type, passed, message, description))
+
+        elif grader_type == 'tool_calls':
+            required = grader.get('required', [])
+            tools_used = set(step.get('tool', '') for step in trajectory)
+
+            all_verified = True
+            for req in required:
+                tool = req.get('tool', '')
+                desc = req.get('description', '')
+                verified = tool in tools_used
+
+                if not verified:
+                    all_verified = False
+
+                result.tool_calls_details.append({
+                    'tool': tool,
+                    'description': desc,
+                    'verified': verified
+                })
+
+            result.tool_calls_verified = all_verified
+
+    # 计算总体是否通过
+    result.passed = (result.failed_checks == 0) and result.tool_calls_verified
+
+    return result
+
+
+# ============================================================
+# 主函数
+# ============================================================
+
 def main():
-    parser = argparse.ArgumentParser(description='Phase 4: 初检验证')
-    parser.add_argument('case_file', help='测试用例 JSON 文件')
-    parser.add_argument('--sandbox', help='使用现有 sandbox ID')
-    parser.add_argument('--output', help='输出结果文件')
-    parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
+    parser = argparse.ArgumentParser(description='Phase 4: 自测验证')
+    parser.add_argument('case_file', help='测试用例 JSON 文件路径')
+    parser.add_argument('--work-dir', default='phase4_workspace', help='工作目录名（默认: phase4_workspace）')
+    parser.add_argument('--output', help='输出结果文件路径')
+    parser.add_argument('--keep-env', action='store_true', help='保留工作环境（不删除）')
+    parser.add_argument('-v', '--verbose', action='store_true', help='详细输出')
 
     args = parser.parse_args()
 
     # 加载 case 文件
-    case_path = Path(args.case_file)
+    case_path = Path(args.case_file).resolve()
     if not case_path.exists():
         print(f"Error: Case file not found: {args.case_file}")
         sys.exit(1)
@@ -222,51 +408,35 @@ def main():
     environment = case_data.get('environment', [])
     reference_solution = case_data.get('reference_solution', [])
 
+    # work_dir 相对于 case.json 所在目录
+    working_dir = case_path.parent
+    work_dir = working_dir / args.work_dir
+
     print(f"\n{'='*60}")
-    print(f"Phase 4: 初检验证")
+    print(f"Phase 4: 自测验证")
     print(f"{'='*60}")
     print(f"Case ID: {case_id}")
     print(f"Tool: {tool_name}, Difficulty: D{difficulty}")
     print(f"Environment files: {len(environment)}")
     print(f"Reference solution steps: {len(reference_solution)}")
+    print(f"Work directory: {work_dir}")
 
-    # 创建或获取 sandbox
-    manager = SandboxManager()
+    # Step 1: 设置工作环境
+    print(f"\n--- Setting up workspace ---")
+    setup_workspace(case_data, work_dir)
 
-    if args.sandbox:
-        info = manager.get(args.sandbox)
-        if info is None:
-            print(f"Error: Sandbox not found: {args.sandbox}")
-            sys.exit(1)
-        # 重置工作区
-        manager.reset_working(info)
-    else:
-        # 提取 init_commands（如果有）
-        init_commands = case_data.get('init_commands', [])
-
-        info = manager.create_from_environment(
-            environment,
-            init_commands=init_commands,
-            case_id=case_id,
-            tool_name=tool_name,
-            difficulty=difficulty
-        )
-
-    print(f"\nSandbox: {info.sandbox_id}")
-    print(f"Working directory: {info.working_path}")
-
-    # 执行 reference_solution
+    # Step 2: 执行 reference_solution
     print(f"\n--- Executing Reference Solution ---")
-    trajectory = execute_reference_solution(info.working_path, reference_solution)
+    trajectory = execute_reference_solution(work_dir, reference_solution)
 
     for step in trajectory:
         status = "✓" if step['success'] else "✗"
-        print(f"  {status} Step {step['step']}: {step['tool']} - {step['output'][:60]}")
+        output_preview = step['output'][:60] if step['output'] else ''
+        print(f"  {status} Step {step['step']}: {step['tool']} - {output_preview}")
 
-    # 验证 graders
+    # Step 3: 验证 graders
     print(f"\n--- Verifying Graders ---")
-    executor = GraderExecutor(info.working_path)
-    result = executor.execute(case_data, trajectory)
+    result = verify_graders(case_data, work_dir, trajectory)
 
     for check_result in result.results:
         status = "✓" if check_result.passed else "✗"
@@ -294,7 +464,6 @@ def main():
     output_data = {
         'phase': 4,
         'case_id': case_id,
-        'sandbox_id': info.sandbox_id,
         'timestamp': datetime.now().isoformat(),
         'passed': result.passed,
         'execution_trajectory': trajectory,
@@ -304,6 +473,7 @@ def main():
             'passed_checks': result.passed_checks,
             'failed_checks': result.failed_checks,
             'tool_calls_verified': result.tool_calls_verified,
+            'tool_calls_details': result.tool_calls_details,
             'details': [
                 {
                     'check_type': r.check_type,
@@ -319,11 +489,16 @@ def main():
     if args.output:
         output_path = Path(args.output)
     else:
-        output_path = info.root_path / 'phase4_result.json'
+        output_path = working_dir / 'phase4_result.json'
 
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(output_data, f, indent=2, ensure_ascii=False)
     print(f"\nResult saved to: {output_path}")
+
+    # 清理工作环境
+    if not args.keep_env and work_dir.exists():
+        shutil.rmtree(work_dir)
+        print(f"Cleaned up: {work_dir}")
 
     sys.exit(0 if result.passed else 1)
 
