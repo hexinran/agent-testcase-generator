@@ -26,15 +26,56 @@ description: Agent Benchmark 出题专家。为强化学习（RL）训练生成�
 
 ---
 
-## 📋 任务参数
+## 📋 任务参数（槽位）
 
-你会收到以下参数：
+外部程序通过"槽位"告诉你设计什么类型的测试用例：
 
 | 参数 | 说明 | 可选值 |
 |------|------|--------|
-| **目标工具** | 测试用例需要使用的核心工具 | Edit, Write, Bash, Grep, Glob, KillShell, WebFetch, web_search |
-| **难度等级** | D2（简单）到 D7（极难） | D2, D3, D4, D5, D6, D7 |
-| **场景主题** | 业务场景描述（由外部系统提供） | "微服务配置错误"、"后台进程清理" 等 |
+| **task_type** | 任务类型 | `code_engineering`, `system_ops`, `data_analysis`, `learning_understanding`, `content_creation`, `information_retrieval` |
+| **perspective** | 人类视角 | `todo`（知道怎么做）, `reference`（需要参考）, `explore`（边做边看，Plan 模式） |
+| **difficulty** | 难度等级 | `D2`-`D7`, `Plan-D4` ~ `Plan-D7` |
+| **tool** | 目标工具 | `Edit`, `Write`, `Bash`, `Grep`, `Glob`, `KillShell`, `WebFetch`, `web_search` |
+
+### 任务类型说明
+
+| 类型 | 描述 | 典型场景 |
+|-----|------|---------|
+| `code_engineering` | 代码工程 | Bug 修复、配置管理、测试执行、代码重构 |
+| `system_ops` | 系统运维 | 版本控制、依赖管理、部署配置、进程管理 |
+| `data_analysis` | 数据分析 | 日志分析、数据处理、指标聚合 |
+| `learning_understanding` | 学习理解 | 架构总结、API 文档、依赖图谱 |
+| `content_creation` | 内容创作 | 迁移指南、变更日志、README 更新 |
+| `information_retrieval` | 信息检索 | 安全审计、TODO 收集、依赖扫描 |
+
+---
+
+## 📖 按需读取文档（渐进式披露）
+
+### 1. 必读（所有任务）
+
+```bash
+Read ~/.claude/skills/agent-testcase-generator/design/core_principles.md
+```
+
+### 2. 按 task_type 读取
+
+根据收到的 `task_type` 参数，读取对应的任务类型文档：
+
+| task_type | 文档 |
+|-----------|------|
+| `code_engineering` | `Read ~/.claude/skills/agent-testcase-generator/design/task_types/code_engineering.md` |
+| `system_ops` | `Read ~/.claude/skills/agent-testcase-generator/design/task_types/system_ops.md` |
+| `data_analysis` | `Read ~/.claude/skills/agent-testcase-generator/design/task_types/data_analysis.md` |
+| `learning_understanding` | `Read ~/.claude/skills/agent-testcase-generator/design/task_types/learning_understanding.md` |
+| `content_creation` | `Read ~/.claude/skills/agent-testcase-generator/design/task_types/content_creation.md` |
+| `information_retrieval` | `Read ~/.claude/skills/agent-testcase-generator/design/task_types/information_retrieval.md` |
+
+### 3. Plan 模式（perspective == explore 或 difficulty 以 Plan- 开头）
+
+```bash
+Read ~/.claude/skills/agent-testcase-generator/design/plan_mode.md
+```
 
 ---
 
@@ -94,112 +135,40 @@ python3 ~/.claude/skills/agent-testcase-generator/scripts/phase7_quality.py case
 Read ~/.claude/skills/agent-testcase-generator/design/core_principles.md
 ```
 
-必须理解的核心概念：
-- 逆向出题：从可验证的终点逆向构建
-- 可验证性：答案必须有明确验证点
-- 低 hacking：答案值不可预测，必须从环境获取
-- 信息藏匿：关键信息分散，设置干扰项（D4+）
+### Step 2: 读取任务类型文档（按槽位）
 
----
+根据收到的 `task_type` 参数读取对应文档（见上方"按需读取文档"）。
 
-### Step 2: 设计测试用例
+### Step 3: 设计测试用例
 
 ```bash
 Read ~/.claude/skills/agent-testcase-generator/design/testcase_design.md
 ```
 
 按文档指引完成：
+1. 环境构建
+2. Query/Target 设计
+3. Grader 设计
+4. Golden Action 设计
+5. 信息复杂化（D4+）
 
-1. **环境构建**
-   - 在工作目录中创建环境文件
-   - 根据难度创建足够数量的文件
-   - 构建真实的项目结构
-
-2. **Query/Target 设计**
-   - Query：任务描述（用户看到的）
-   - Target：预期目标状态（可验证）
-   - 答案值必须从环境中获取
-
-3. **Grader 设计**
-   - 设计验证逻辑（2-4 个验证点）
-   - 验证具体内容（不只是文件存在）
-   - 防止答案被猜测
-
-4. **Golden Action 设计**
-   - 参考解答路径
-   - 长度符合难度要求
-   - 最后一步使用目标工具
-
-5. **信息复杂化**
-   - 分散关键信息
-   - 添加干扰文件
-   - 设置红鲱鱼（D4+）
-
-**Grader 完整规范**（需要时查阅）：
-```bash
-Read ~/.claude/skills/agent-testcase-generator/reference/grader_spec.md
-```
-
-**难度要求详解**（需要时查阅）：
-```bash
-Read ~/.claude/skills/agent-testcase-generator/reference/difficulty_guide.md
-```
-
----
-
-### Step 3: 自测与修复
+### Step 4: 自测与修复
 
 ```bash
 Read ~/.claude/skills/agent-testcase-generator/verification/self_test.md
 ```
 
-按文档指引：
-1. 保存 `case.json` 到工作目录
-2. 执行验证脚本
-3. 根据结果决定是否需要修复
-4. 修复后重新验证
-
-**脚本详细用法**（需要时查阅）：
-```bash
-Read ~/.claude/skills/agent-testcase-generator/reference/script_usage.md
-```
-
----
-
-### Step 4: Haiku 验证
+### Step 5: Haiku 验证
 
 ```bash
 Read ~/.claude/skills/agent-testcase-generator/verification/haiku_verification.md
 ```
 
-按文档指引：
-1. 创建 `haiku_space/` 子目录
-2. **只复制环境文件**（不复制 case.json）
-3. 执行验证脚本
-4. 读取 `haiku_space/phase6_result.json`
-5. 提取 `haiku_evaluation` 和 `haiku_trajectory`（原封不动复制）
-6. 分析结果，决定是否需要回炉（只回炉一次）
+### Step 6: 输出最终结果
 
----
-
-### Step 5: 输出最终结果
-
-将完整测试用例保存为 JSON 到工作目录。
-
-**输出格式详解**（需要时查阅）：
 ```bash
 Read ~/.claude/skills/agent-testcase-generator/reference/output_format.md
 ```
-
-核心字段：
-- `task`: 任务元信息（id, desc, tool_name, difficulty, scenario_theme）
-- `environment`: 环境文件列表
-- `init_commands`: 初始化命令（可选）
-- `reference_solution`: Golden Action（参考解答）
-- `graders`: 验证逻辑
-- `haiku_evaluation`: Haiku 验证结果
-- `haiku_trajectory`: Haiku 执行轨迹（从 phase6_result.json 复制）
-- `quality_analysis`: 质量分析
 
 ---
 
@@ -207,6 +176,19 @@ Read ~/.claude/skills/agent-testcase-generator/reference/output_format.md
 
 ### 必读
 - `design/core_principles.md` - 核心设计原则
+
+### 任务类型文档（按需读取）
+- `design/task_types/code_engineering.md` - 代码工程
+- `design/task_types/system_ops.md` - 系统运维
+- `design/task_types/data_analysis.md` - 数据分析
+- `design/task_types/learning_understanding.md` - 学习理解
+- `design/task_types/content_creation.md` - 内容创作
+- `design/task_types/information_retrieval.md` - 信息检索
+
+### Plan 模式文档
+- `design/plan_mode.md` - Plan 模式设计原则
+- `reference/plan_mode_graders.md` - Plan 模式 Grader 模板
+- `reference/plan_mode_examples.md` - Plan 模式完整示例
 
 ### 流程文档
 - `design/testcase_design.md` - 完整设计流程
@@ -226,6 +208,7 @@ Read ~/.claude/skills/agent-testcase-generator/reference/output_format.md
 ## ✅ 完成检查清单
 
 - [ ] 已阅读 `design/core_principles.md`
+- [ ] 已阅读对应的 task_type 文档
 - [ ] 环境文件数符合难度要求
 - [ ] Golden Action 步数符合难度要求
 - [ ] Grader 验证具体内容（不只是文件存在）
@@ -244,3 +227,5 @@ Read ~/.claude/skills/agent-testcase-generator/reference/output_format.md
 ```bash
 Read ~/.claude/skills/agent-testcase-generator/design/core_principles.md
 ```
+
+第二步：根据 task_type 参数读取对应的任务类型文档

@@ -184,6 +184,31 @@ Grader 用于验证 Agent 是否正确完成了任务。相比旧版 `golden_che
 | `tool_used_webfetch` | `url_pattern?` | 验证使用了 WebFetch |
 | `tool_used_web_search` | `keyword_pattern?` | 验证使用了 web_search |
 
+### Git 相关检查类
+
+| Check 类型 | 参数 | 描述 |
+|-----------|------|------|
+| `git_commit_message` | `pattern` | 检查最新提交消息匹配模式 |
+| `git_branch_exists` | `branch_name` | 检查分支是否存在 |
+| `git_file_staged` | `file_path` | 检查文件是否已暂存 |
+| `git_file_committed` | `file_path` | 检查文件是否在最新提交中 |
+
+### 结构化数据检查类
+
+| Check 类型 | 参数 | 描述 |
+|-----------|------|------|
+| `json_path_equals` | `path`, `json_path`, `expected` | 检查 JSON 路径值 |
+| `yaml_key_equals` | `path`, `key_path`, `expected` | 检查 YAML 键值 |
+
+### Plan 模式检查类
+
+| Check 类型 | 参数 | 描述 |
+|-----------|------|------|
+| `file_moved` | `source`, `destination` | 验证文件从源移动到目标 |
+| `import_updated` | `path`, `old_import`, `new_import` | 验证导入语句已更新 |
+| `file_not_exists` | `path` | 检查文件不存在 |
+| `directory_exists` | `path` | 检查目录存在 |
+
 ---
 
 ## Grader Implementation 函数签名

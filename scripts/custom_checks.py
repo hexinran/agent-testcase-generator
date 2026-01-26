@@ -719,6 +719,269 @@ def check_tool_used_web_search(sandbox_dir: Path, params: dict, trajectory=None)
 
 
 # =============================================================================
+# Git 相关检查函数
+# =============================================================================
+
+def check_git_commit_message(sandbox_dir: Path, params: dict, trajectory=None) -> Tuple[bool, str]:
+    """检查最新提交消息是否包含特定模式"""
+    pattern = params.get('pattern', '')
+
+    if not pattern:
+        return False, "no pattern provided"
+
+    try:
+        cmd = "git log -1 --pretty=%B"
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            cwd=str(sandbox_dir),
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        commit_message = result.stdout.strip()
+        if not commit_message:
+            return False, "no commit found"
+
+        if re.search(pattern, commit_message):
+            return True, f"commit message matches pattern '{pattern}'"
+        return False, f"commit message does not match pattern '{pattern}': {commit_message[:100]}"
+    except Exception as e:
+        return False, f"git error: {e}"
+
+
+def check_git_branch_exists(sandbox_dir: Path, params: dict, trajectory=None) -> Tuple[bool, str]:
+    """检查分支是否存在"""
+    branch_name = params.get('branch_name', '')
+
+    if not branch_name:
+        return False, "no branch_name provided"
+
+    try:
+        cmd = f"git branch --list '{branch_name}'"
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            cwd=str(sandbox_dir),
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if branch_name in result.stdout:
+            return True, f"branch '{branch_name}' exists"
+        return False, f"branch '{branch_name}' not found"
+    except Exception as e:
+        return False, f"git error: {e}"
+
+
+def check_git_file_staged(sandbox_dir: Path, params: dict, trajectory=None) -> Tuple[bool, str]:
+    """检查文件是否已暂存"""
+    file_path = params.get('file_path', '')
+
+    if not file_path:
+        return False, "no file_path provided"
+
+    try:
+        cmd = "git diff --cached --name-only"
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            cwd=str(sandbox_dir),
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        staged_files = result.stdout.strip().split('\n')
+        if file_path in staged_files or any(file_path in f for f in staged_files):
+            return True, f"file '{file_path}' is staged"
+        return False, f"file '{file_path}' is not staged"
+    except Exception as e:
+        return False, f"git error: {e}"
+
+
+def check_git_file_committed(sandbox_dir: Path, params: dict, trajectory=None) -> Tuple[bool, str]:
+    """检查文件是否在最新提交中"""
+    file_path = params.get('file_path', '')
+
+    if not file_path:
+        return False, "no file_path provided"
+
+    try:
+        cmd = "git diff-tree --no-commit-id --name-only -r HEAD"
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            cwd=str(sandbox_dir),
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        committed_files = result.stdout.strip().split('\n')
+        if file_path in committed_files or any(file_path in f for f in committed_files):
+            return True, f"file '{file_path}' is in latest commit"
+        return False, f"file '{file_path}' is not in latest commit"
+    except Exception as e:
+        return False, f"git error: {e}"
+
+
+# =============================================================================
+# 结构化数据检查函数
+# =============================================================================
+
+def check_json_path_equals(sandbox_dir: Path, params: dict, trajectory=None) -> Tuple[bool, str]:
+    """检查 JSON 文件中特定路径的值"""
+    path = params.get('path', '')
+    json_path = params.get('json_path', '')
+    expected = params.get('expected', '')
+
+    full_path = _resolve_path(path, sandbox_dir)
+
+    if not full_path.exists():
+        return False, f"file not found: {path}"
+
+    try:
+        content = json.loads(full_path.read_text(encoding='utf-8'))
+
+        # 解析 JSON 路径 (支持 a.b.c 格式)
+        keys = json_path.split('.')
+        value = content
+        for key in keys:
+            if isinstance(value, dict):
+                value = value.get(key)
+            elif isinstance(value, list) and key.isdigit():
+                value = value[int(key)]
+            else:
+                return False, f"invalid path: {json_path}"
+
+        if str(value) == str(expected):
+            return True, f"json_path '{json_path}' equals '{expected}'"
+        return False, f"json_path '{json_path}' is '{value}', expected '{expected}'"
+    except json.JSONDecodeError as e:
+        return False, f"invalid JSON: {e}"
+    except Exception as e:
+        return False, f"error: {e}"
+
+
+def check_yaml_key_equals(sandbox_dir: Path, params: dict, trajectory=None) -> Tuple[bool, str]:
+    """检查 YAML 文件中特定键的值"""
+    path = params.get('path', '')
+    key_path = params.get('key_path', '')
+    expected = params.get('expected', '')
+
+    full_path = _resolve_path(path, sandbox_dir)
+
+    if not full_path.exists():
+        return False, f"file not found: {path}"
+
+    try:
+        import yaml
+        content = yaml.safe_load(full_path.read_text(encoding='utf-8'))
+
+        # 解析键路径 (支持 a.b.c 格式)
+        keys = key_path.split('.')
+        value = content
+        for key in keys:
+            if isinstance(value, dict):
+                value = value.get(key)
+            elif isinstance(value, list) and key.isdigit():
+                value = value[int(key)]
+            else:
+                return False, f"invalid key path: {key_path}"
+
+        if str(value) == str(expected):
+            return True, f"yaml_key '{key_path}' equals '{expected}'"
+        return False, f"yaml_key '{key_path}' is '{value}', expected '{expected}'"
+    except ImportError:
+        # 如果没有 yaml 模块，使用简单的字符串匹配
+        content = full_path.read_text(encoding='utf-8')
+        if f"{key_path.split('.')[-1]}: {expected}" in content:
+            return True, f"yaml contains '{key_path}: {expected}' (simple match)"
+        return False, f"yaml does not contain expected value (yaml module not available)"
+    except Exception as e:
+        return False, f"error: {e}"
+
+
+# =============================================================================
+# Plan 模式专用检查函数
+# =============================================================================
+
+def check_file_moved(sandbox_dir: Path, params: dict, trajectory=None) -> Tuple[bool, str]:
+    """检查文件是否从源位置移动到目标位置"""
+    source = params.get('source', '')
+    destination = params.get('destination', '')
+
+    source_path = _resolve_path(source, sandbox_dir)
+    dest_path = _resolve_path(destination, sandbox_dir)
+
+    source_exists = source_path.exists()
+    dest_exists = dest_path.exists()
+
+    if not source_exists and dest_exists:
+        return True, f"file moved from '{source}' to '{destination}'"
+    elif source_exists and dest_exists:
+        return False, f"file copied (source still exists): {source}"
+    elif source_exists and not dest_exists:
+        return False, f"file not moved (still at source): {source}"
+    else:
+        return False, f"neither source nor destination exists"
+
+
+def check_import_updated(sandbox_dir: Path, params: dict, trajectory=None) -> Tuple[bool, str]:
+    """检查文件中的导入语句是否已更新"""
+    path = params.get('path', '')
+    old_import = params.get('old_import', '')
+    new_import = params.get('new_import', '')
+
+    full_path = _resolve_path(path, sandbox_dir)
+
+    if not full_path.exists():
+        return False, f"file not found: {path}"
+
+    try:
+        content = full_path.read_text(encoding='utf-8')
+
+        has_old = old_import in content
+        has_new = new_import in content
+
+        if not has_old and has_new:
+            return True, f"import updated from '{old_import}' to '{new_import}'"
+        elif has_old and has_new:
+            return False, f"both old and new imports exist"
+        elif has_old and not has_new:
+            return False, f"import not updated (old import still exists)"
+        else:
+            return False, f"neither old nor new import found"
+    except Exception as e:
+        return False, f"error: {e}"
+
+
+def check_file_not_exists(sandbox_dir: Path, params: dict, trajectory=None) -> Tuple[bool, str]:
+    """检查文件不存在"""
+    path = params.get('path', '')
+    full_path = _resolve_path(path, sandbox_dir)
+
+    if not full_path.exists():
+        return True, f"file correctly does not exist: {path}"
+    return False, f"file unexpectedly exists: {path}"
+
+
+def check_directory_exists(sandbox_dir: Path, params: dict, trajectory=None) -> Tuple[bool, str]:
+    """检查目录存在"""
+    path = params.get('path', '')
+    full_path = _resolve_path(path, sandbox_dir)
+
+    if full_path.exists() and full_path.is_dir():
+        return True, f"directory exists: {path}"
+    elif full_path.exists():
+        return False, f"path exists but is not a directory: {path}"
+    return False, f"directory not found: {path}"
+
+
+# =============================================================================
 # Check 注册表
 # =============================================================================
 
@@ -767,6 +1030,22 @@ CHECK_REGISTRY = {
     # Web 工具检查
     'tool_used_webfetch': check_tool_used_webfetch,
     'tool_used_web_search': check_tool_used_web_search,
+
+    # Git 相关检查
+    'git_commit_message': check_git_commit_message,
+    'git_branch_exists': check_git_branch_exists,
+    'git_file_staged': check_git_file_staged,
+    'git_file_committed': check_git_file_committed,
+
+    # 结构化数据检查
+    'json_path_equals': check_json_path_equals,
+    'yaml_key_equals': check_yaml_key_equals,
+
+    # Plan 模式检查
+    'file_moved': check_file_moved,
+    'import_updated': check_import_updated,
+    'file_not_exists': check_file_not_exists,
+    'directory_exists': check_directory_exists,
 
     # 其他
     'file_exists_any': check_file_exists_any,
