@@ -158,13 +158,25 @@ Read ~/.claude/skills/agent-testcase-generator/design/testcase_design.md
 Read ~/.claude/skills/agent-testcase-generator/verification/self_test.md
 ```
 
-### Step 5: Haiku 验证
+执行自测脚本验证 Golden Action 可执行且 Grader 能通过。
+
+### Step 5: Haiku 验证（必须执行）
+
+⚠️ **自测通过后必须继续执行 Haiku 验证，不能跳过！**
 
 ```bash
 Read ~/.claude/skills/agent-testcase-generator/verification/haiku_verification.md
 ```
 
+Haiku 验证的目的：
+- 观察较弱模型的解题表现
+- 评估题目难度是否合理
+- **无论 Haiku 是否完成，都要记录 `haiku_trajectory`**
+- Haiku 完不成不代表题目有问题，可能只是难度较高
+
 ### Step 6: 输出最终结果
+
+**前置条件**：Step 4 自测通过 **且** Step 5 Haiku 验证已执行
 
 ```bash
 Read ~/.claude/skills/agent-testcase-generator/reference/output_format.md
