@@ -11,7 +11,7 @@ Agent Benchmark 出题专家。为强化学习（RL）训练生成高质量、�
 - **逆向出题**：从可验证的目标逆向设计，确保题目有效
 - **强可验证性**：每个题目都有明确的 Grader 验证逻辑
 - **低 hacking 概率**：答案不能被猜测或蒙对，必须通过探索获得
-- **多维度覆盖**：6 种任务类型 × 3 种视角 × 10 种难度 × 8 种工具
+- **多维度覆盖**：6 种任务类型 × 3 种视角 × 6 种难度 × 8 种工具
 - **Plan 模式**：支持多文件协调操作的复杂重构场景
 
 ## 安装
@@ -73,12 +73,12 @@ ln -sf $(pwd)/agent-testcase-generator ~/.claude/skills/agent-testcase-generator
 
 | 等级 | 文件数 | 步数 | 特点 |
 |-----|-------|-----|------|
-| D2 | 2-4 | 2-3 | 简单直接 |
-| D3 | 4-6 | 3-5 | 跨文件 |
-| D4 | 6-10 | 5-7 | 有干扰项 |
-| D5 | 10-15 | 7-9 | 复杂依赖 |
-| D6 | 15-20 | 9-12 | 深度推理 |
-| D7 | 20+ | 12+ | 极限挑战 |
+| D2 | 3-5 | 1-2 | 简单直接 |
+| D3 | 8-12 | 3-4 | 需要探索 |
+| D4 | 12-15 | 5-6 | 有干扰项 |
+| D5 | 15-20 | 7-8 | 复杂依赖 |
+| D6 | 20-25 | 9-10 | 深度推理 |
+| D7 | 25-35 | 11-15 | 极限挑战 |
 
 **Plan 模式**：Plan-D4 ~ Plan-D7（多文件协调操作）
 
@@ -86,53 +86,77 @@ ln -sf $(pwd)/agent-testcase-generator ~/.claude/skills/agent-testcase-generator
 
 ```
 agent-testcase-generator/
-├── SKILL.md                          # Skill 入口文件
-├── design/
-│   ├── core_principles.md            # 核心设计原则
-│   ├── testcase_design.md            # 测试用例设计流程
-│   ├── plan_mode.md                  # Plan 模式设计原则
-│   └── task_types/                   # 任务类型文档
-│       ├── code_engineering.md
-│       ├── system_ops.md
-│       ├── data_analysis.md
-│       ├── learning_understanding.md
-│       ├── content_creation.md
-│       └── information_retrieval.md
-├── reference/
-│   ├── difficulty_guide.md           # 难度分级指南
-│   ├── examples.md                   # 示例用例
-│   ├── grader_spec.md                # Grader 格式规范 (42 种 Check 类型)
-│   ├── output_format.md              # 输出格式规范
-│   ├── script_usage.md               # 脚本使用说明
-│   ├── plan_mode_graders.md          # Plan 模式 Grader 模板
-│   └── plan_mode_examples.md         # Plan 模式完整示例
-├── scripts/
-│   ├── custom_checks.py              # 自定义检查实现 (42 种)
-│   ├── phase4_verify.py              # Phase 4 自测验证
-│   ├── phase6_haiku.py               # Phase 6 Haiku 验证
-│   └── phase7_quality.py             # Phase 7 质量检查
-└── verification/
+├── SKILL.md                      # Skill 入口文件
+│
+├── core/                         # 【必读】核心文档
+│   ├── principles.md             # 核心设计原则
+│   ├── design_flow.md            # 测试用例设计流程
+│   ├── output_format.md          # 输出格式规范
+│   ├── verify.md                 # 验证流程
+│   └── grader_basics.md          # Grader 基础格式
+│
+├── task_types/                   # 【按槽位】任务类型
+│   ├── code_engineering.md
+│   ├── system_ops.md
+│   ├── data_analysis.md
+│   ├── learning_understanding.md
+│   ├── content_creation.md
+│   └── information_retrieval.md
+│
+├── difficulty/                   # 【按槽位】难度等级
+│   ├── D2.md ~ D7.md
+│
+├── perspective/                  # 【按槽位】视角
+│   ├── todo.md                   # todo 视角
+│   ├── reference.md              # reference 视角
+│   ├── explore.md                # explore 视角（Plan 模式）
+│   └── explore_graders.md        # Plan 模式 Grader 模板
+│
+├── graders/                      # 【按需】Grader Check 类型
+│   ├── file_checks.md            # 文件检查
+│   ├── bash_checks.md            # Bash/进程检查
+│   ├── web_checks.md             # Web 工具检查
+│   ├── structured_data_checks.md # JSON/YAML 检查
+│   └── advanced_checks.md        # 高级检查
+│
+├── tools/                        # 【待建设】工具特定指南
+│
+├── reference/                    # 参考文档
+│   ├── examples.md               # 示例用例
+│   ├── script_usage.md           # 脚本使用说明
+│   └── plan_mode_examples.md     # Plan 模式完整示例
+│
+├── scripts/                      # 验证脚本
+│   ├── custom_checks.py          # 自定义检查实现
+│   ├── phase4_verify.py          # Phase 4 自测验证
+│   └── phase6_haiku.py           # Phase 6 Haiku 验证
+│
+└── verification/                 # 验证文档
     ├── haiku_verification.md
     └── self_test.md
 ```
 
-## Grader Check 类型
+## 阅读路径
 
-支持 42 种 Check 类型，包括：
+### 必读（所有出题）
 
-**文件检查**：`file_exists`, `file_content_contains`, `file_content_not_contains`, `file_moved`, ...
+```
+SKILL.md → core/principles.md → core/design_flow.md → core/output_format.md → core/verify.md
+```
 
-**Git 检查**：`git_commit_message`, `git_branch_exists`, `git_file_staged`, `git_file_committed`
+### 按槽位追加
 
-**结构化数据**：`json_path_equals`, `yaml_key_equals`
+```
++ task_types/<task_type>.md
++ difficulty/<difficulty>.md
++ (如果 perspective=explore) perspective/explore.md
+```
 
-**Plan 模式**：`file_moved`, `import_updated`, `file_not_exists`, `directory_exists`
+### 按需查阅
 
-完整列表见 `reference/grader_spec.md`
-
-## 配套资源
-
-- `resources/scenario_pool.json` - 场景池配置（多维度结构）
+```
+graders/<类型>.md    # 遇到不熟悉的 check 类型时
+```
 
 ## License
 
