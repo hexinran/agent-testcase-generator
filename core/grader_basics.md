@@ -1,6 +1,6 @@
-# Grader 格式规范
+# Grader 基础
 
-本文档定义 Grader（评分器）的标准格式。
+本文档定义 Grader（评分器）的基础格式和常用 check 类型。
 
 ---
 
@@ -9,12 +9,12 @@
 **Grader 在初始环境状态下必须失败，只有 Agent 正确执行任务后才能通过。**
 
 ```
-❌ 错误设计：
+错误设计：
   环境：config.yaml 中 port: 8080
   Grader：检查 config.yaml 存在
   问题：初始状态就能通过！
 
-✅ 正确设计：
+正确设计：
   环境：config.yaml 中 port: 5432（错误值）
   Grader：检查 config.yaml 包含 "port: 8080"
   正确：初始状态失败，修复后通过
@@ -74,7 +74,9 @@
 }
 ```
 
-#### 参数匹配方式
+---
+
+## 参数匹配方式
 
 | match 类型 | 含义 | 示例 |
 |-----------|------|------|
@@ -92,7 +94,7 @@
 
 ---
 
-## 标准 Check 类型
+## 常用 Check 类型
 
 ### 文件检查类
 
@@ -103,8 +105,6 @@
 | `file_content_contains` | `path`, `keyword`, `case_insensitive?` | 检查文件包含关键词 |
 | `file_content_not_contains` | `path`, `keyword` | 检查文件不包含关键词 |
 | `file_content_match` | `path`, `pattern` | 检查文件内容匹配正则 |
-| `directory_exists` | `path` | 检查目录存在 |
-| `file_executable` | `path` | 检查文件可执行 |
 
 ### 执行结果检查类
 
@@ -120,36 +120,6 @@
 | `bash_process_running` | `process_name?`, `pid_file?` | 检查进程运行 |
 | `bash_process_not_running` | `process_name?`, `pid_file?` | 检查进程已停止 |
 
-### Grep/Glob 结果检查类
-
-| Check 类型 | 参数 | 描述 |
-|-----------|------|------|
-| `grep_output_contains` | `pattern`, `path`, `expected` | 检查 grep 输出 |
-| `grep_finds_pattern` | `pattern`, `path`, `expected_files` | 检查 grep 找到的文件 |
-| `glob_result_contains` | `pattern`, `expected_files` | 检查 glob 结果包含文件 |
-| `glob_result_count` | `pattern`, `min_count?`, `max_count?` | 检查 glob 结果数量 |
-
-### Web 工具检查类
-
-| Check 类型 | 参数 | 描述 |
-|-----------|------|------|
-| `tool_used_webfetch` | `url_pattern?` | 验证使用了 WebFetch |
-| `tool_used_web_search` | `keyword_pattern?` | 验证使用了 web_search |
-
-### 结构化数据检查类
-
-| Check 类型 | 参数 | 描述 |
-|-----------|------|------|
-| `json_path_equals` | `path`, `json_path`, `expected` | 检查 JSON 路径值 |
-| `yaml_key_equals` | `path`, `key_path`, `expected` | 检查 YAML 键值 |
-
-### 高级检查类
-
-| Check 类型 | 参数 | 描述 |
-|-----------|------|------|
-| `custom_script` | `script_content`, `timeout?` | 执行自定义 Python 脚本 |
-| `any_of` | `checks` | 多个 check 满足其一 |
-
 ---
 
 ## 路径格式规范
@@ -160,18 +130,47 @@
 
 ---
 
-## 实现细节
+## 设计原则
 
-所有 check 类型的实现代码在 `scripts/custom_checks.py` 中。
+### 原则 1：至少 2-4 个验证点
 
-函数签名：
-```python
-def check_<check_type>(
-    sandbox_dir: Path,
-    params: dict,
-    trajectory: list = None
-) -> Tuple[bool, str]:
-    """返回 (是否通过, 描述信息)"""
+```json
+{
+  "checks": [
+    {"check": "file_content_contains", "params": {"path": "config.yaml", "keyword": "host: db-prod-03.internal"}},
+    {"check": "file_content_contains", "params": {"path": "config.yaml", "keyword": "port: 19847"}},
+    {"check": "file_content_contains", "params": {"path": "config.yaml", "keyword": "timeout: 47000"}},
+    {"check": "file_content_not_contains", "params": {"path": "config.yaml", "keyword": "timeout: 5000"}}
+  ]
+}
 ```
 
-参数匹配实现在 `scripts/phase4_verify.py` 的 `match_param_value()` 函数中。
+### 原则 2：验证具体内容，不只是文件存在
+
+```json
+// 不好：只验证存在
+{"check": "file_exists", "params": {"path": "report.json"}}
+
+// 好：验证具体内容
+[
+  {"check": "file_exists", "params": {"path": "report.json"}},
+  {"check": "file_content_contains", "params": {"path": "report.json", "keyword": "\"status\": \"completed\""}},
+  {"check": "file_content_contains", "params": {"path": "report.json", "keyword": "\"total_issues\": 3"}}
+]
+```
+
+### 原则 3：防止答案被猜测
+
+```json
+// 不好：任何端口都能通过
+{"check": "file_content_contains", "params": {"path": "config.yaml", "keyword": "port:"}}
+
+// 好：验证具体值
+{"check": "file_content_contains", "params": {"path": "config.yaml", "keyword": "port: 19847"}}
+```
+
+---
+
+## 详细 Check 类型
+
+更多 check 类型详见：`graders/` 目录

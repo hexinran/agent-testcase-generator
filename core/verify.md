@@ -30,11 +30,11 @@ python3 ~/.claude/skills/agent-testcase-generator/scripts/phase4_verify.py case.
 
 ### 可修改的部分
 
-- ✅ Query（修复歧义、调整模糊度）
-- ✅ Grader（调整验证条件）
-- ✅ Environment 内容（修复错误、补充信息）
-- ❌ Environment 结构（不能大改目录）
-- ❌ Golden Action 核心逻辑（不能减少步数）
+- Query（修复歧义、调整模糊度）
+- Grader（调整验证条件）
+- Environment 内容（修复错误、补充信息）
+- **不能**大改 Environment 结构
+- **不能**减少 Golden Action 核心逻辑
 
 **验证通过后进入 Phase 6**。
 
@@ -75,15 +75,15 @@ python3 ~/.claude/skills/agent-testcase-generator/scripts/phase6_haiku.py case.j
 
 ### 提取轨迹数据
 
-**🚨 强制要求**：从 `phase6_result.json` 复制到最终 `case.json`：
+**强制要求**：从 `phase6_result.json` 复制到最终 `case.json`：
 
 1. `haiku_evaluation`（整个对象）
 2. `haiku_trajectory`（从 `haiku_execution.trajectory` 复制）
 
 **严禁**：
-- ❌ 编造轨迹数据
-- ❌ 总结或改写 output
-- ❌ 添加 reasoning 字段
+- 编造轨迹数据
+- 总结或改写 output
+- 添加 reasoning 字段
 
 ---
 
@@ -120,7 +120,4 @@ KillShell 场景需要 `init_commands` 启动后台进程：
 
 ## 下一步
 
-验证完成后，输出最终结果：
-```bash
-Read ~/.claude/skills/agent-testcase-generator/reference/output_format.md
-```
+验证完成后，输出最终结果：阅读 `core/output_format.md`

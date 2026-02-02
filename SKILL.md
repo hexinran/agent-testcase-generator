@@ -14,13 +14,7 @@ description: Agent Benchmark 出题专家。为强化学习（RL）训练生成�
 
 ---
 
-## 📍 Skill 资源路径
-
-`~/.claude/skills/agent-testcase-generator/`
-
----
-
-## 📋 任务参数（槽位）
+## 任务参数（槽位）
 
 | 参数 | 说明 | 可选值 |
 |------|------|--------|
@@ -31,49 +25,107 @@ description: Agent Benchmark 出题专家。为强化学习（RL）训练生成�
 
 ---
 
-## 📖 按需读取文档
+## 阅读路径
 
-### 1. 必读（所有任务）
+### 必读（所有出题）
 
-```bash
-Read ~/.claude/skills/agent-testcase-generator/design/core_principles.md
+```
+SKILL.md
+  ↓
+core/principles.md      # 核心原则（逆向、可验证、低hacking、信息藏匿）
+  ↓
+core/design_flow.md     # 设计流程（环境→Query→Grader→Golden Action→复杂化）
+  ↓
+core/output_format.md   # 输出格式（case.json 结构）
+  ↓
+core/verify.md          # 验证流程（Phase 4/6 + 脚本用法）
 ```
 
-### 2. 按 task_type 读取
+### 按槽位追加
 
-| task_type | 文档 |
-|-----------|------|
-| `code_engineering` | `design/task_types/code_engineering.md` |
-| `system_ops` | `design/task_types/system_ops.md` |
-| `data_analysis` | `design/task_types/data_analysis.md` |
-| `learning_understanding` | `design/task_types/learning_understanding.md` |
-| `content_creation` | `design/task_types/content_creation.md` |
-| `information_retrieval` | `design/task_types/information_retrieval.md` |
+```
++ task_types/<task_type>.md      # 根据 task_type 参数
++ difficulty/<difficulty>.md     # 根据 difficulty 参数
++ (如果 perspective=explore) perspective/explore.md
+```
 
-### 3. Plan 模式（perspective == explore）
+### 按需查阅
 
-```bash
-Read ~/.claude/skills/agent-testcase-generator/design/plan_mode.md
+```
+graders/<类型>.md                # 遇到不熟悉的 check 类型时
+core/grader_basics.md            # Grader 基础格式
 ```
 
 ---
 
-## 🚨 强制要求
+## 目录结构
+
+```
+agent-testcase-generator/
+│
+├── SKILL.md                      # 入口（本文件）
+│
+├── core/                         # 【必读】所有出题都需要
+│   ├── principles.md             # 核心原则
+│   ├── design_flow.md            # 设计流程
+│   ├── output_format.md          # 输出格式
+│   ├── verify.md                 # 验证流程
+│   └── grader_basics.md          # Grader 基础
+│
+├── task_types/                   # 【按槽位】task_type
+│   ├── code_engineering.md
+│   ├── system_ops.md
+│   ├── data_analysis.md
+│   ├── learning_understanding.md
+│   ├── content_creation.md
+│   └── information_retrieval.md
+│
+├── difficulty/                   # 【按槽位】difficulty
+│   ├── D2.md
+│   ├── D3.md
+│   ├── D4.md
+│   ├── D5.md
+│   ├── D6.md
+│   └── D7.md
+│
+├── perspective/                  # 【按槽位】perspective
+│   ├── todo.md                   # todo 视角
+│   ├── reference.md              # reference 视角
+│   ├── explore.md                # explore 视角（Plan 模式）
+│   └── explore_graders.md        # Plan 模式 Grader 模板
+│
+├── graders/                      # 【按需】详细 check 类型
+│   ├── file_checks.md            # file_exists, file_content_contains 等
+│   ├── bash_checks.md            # bash_check, bash_process_not_running 等
+│   ├── web_checks.md             # tool_used_webfetch 等
+│   ├── structured_data_checks.md # json_path_equals, yaml_key_equals
+│   └── advanced_checks.md        # any_of, custom_script 等
+│
+├── tools/                        # 【待建设】tool 特定指南
+│
+└── scripts/                      # 验证脚本
+    ├── phase4_verify.py
+    └── phase6_haiku.py
+```
+
+---
+
+## 强制要求
 
 ### 1. 开始前必读核心原则
 
 ```bash
-Read ~/.claude/skills/agent-testcase-generator/design/core_principles.md
+Read core/principles.md
 ```
 
-### 2. 验证阶段必须使用脚手架
+### 2. 验证阶段必须使用脚本
 
 ```bash
 # 自测验证
-python3 ~/.claude/skills/agent-testcase-generator/scripts/phase4_verify.py case.json
+python3 scripts/phase4_verify.py case.json
 
 # Haiku 验证
-python3 ~/.claude/skills/agent-testcase-generator/scripts/phase6_haiku.py case.json
+python3 scripts/phase6_haiku.py case.json
 ```
 
 **严禁**：编造验证数据、跳过验证步骤、手动编写 haiku_trajectory
@@ -85,31 +137,9 @@ python3 ~/.claude/skills/agent-testcase-generator/scripts/phase6_haiku.py case.j
 
 ---
 
-## 📖 工作流程
+## 完成检查清单
 
-1. **理解原则**：`Read design/core_principles.md`
-2. **读取任务类型文档**：根据 task_type 参数
-3. **设计测试用例**：`Read design/testcase_design.md`
-4. **验证**：`Read verification/workflow.md`
-5. **输出结果**：`Read reference/output_format.md`
-
----
-
-## 📚 文档索引
-
-| 类别 | 文档 |
-|------|------|
-| **必读** | `design/core_principles.md` |
-| **设计流程** | `design/testcase_design.md` |
-| **验证流程** | `verification/workflow.md` |
-| **参考** | `reference/grader_spec.md`, `reference/difficulty_guide.md`, `reference/output_format.md` |
-| **Plan 模式** | `design/plan_mode.md`, `reference/plan_mode_graders.md` |
-
----
-
-## ✅ 完成检查清单
-
-- [ ] 已阅读 `design/core_principles.md`
+- [ ] 已阅读 `core/principles.md`
 - [ ] 环境文件数和 Golden Action 步数符合难度要求
 - [ ] Grader 验证具体内容（不只是文件存在）
 - [ ] 答案值不可预测，必须从环境中获取
@@ -119,8 +149,8 @@ python3 ~/.claude/skills/agent-testcase-generator/scripts/phase6_haiku.py case.j
 
 ---
 
-## 🚀 开始工作
+## 开始工作
 
 ```bash
-Read ~/.claude/skills/agent-testcase-generator/design/core_principles.md
+Read core/principles.md
 ```
