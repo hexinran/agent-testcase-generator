@@ -268,17 +268,37 @@
 
 #### tool_calls（工具使用检查）
 
+基础格式（只验证工具使用）：
+```json
+{
+  "type": "tool_calls",
+  "required": [
+    {"tool": "Edit", "description": "必须使用 Edit 工具"}
+  ]
+}
+```
+
+带参数验证的格式：
 ```json
 {
   "type": "tool_calls",
   "required": [
     {
       "tool": "Edit",
-      "description": "必须使用 Edit 工具修改配置"
+      "params": {
+        "file_path": "config/database.yaml",
+        "new_string": {"match": "contains", "value": "timeout: 47000"}
+      },
+      "description": "必须修改 database.yaml 并设置正确的 timeout"
     }
   ]
 }
 ```
+
+**参数匹配方式**：
+- `exact`（默认）：完全相等，如 `"file_path": "config/db.yaml"`
+- `contains`：包含匹配，如 `{"match": "contains", "value": "logs/"}`
+- `regex`：正则匹配，如 `{"match": "regex", "value": "timeout|error"}`
 
 **完整示例**：
 ```json
@@ -289,30 +309,27 @@
       "checks": [
         {
           "check": "file_content_contains",
-          "params": {"path": "config/database.yaml", "keyword": "host: db-prod-03.internal"},
-          "description": "验证主机配置正确"
-        },
-        {
-          "check": "file_content_contains",
-          "params": {"path": "config/database.yaml", "keyword": "port: 19847"},
-          "description": "验证端口配置正确"
-        },
-        {
-          "check": "file_content_contains",
           "params": {"path": "config/database.yaml", "keyword": "timeout: 47000"},
           "description": "验证超时配置正确"
-        },
-        {
-          "check": "file_content_not_contains",
-          "params": {"path": "config/database.yaml", "keyword": "timeout: 5000"},
-          "description": "验证错误配置已移除"
         }
       ]
     },
     {
       "type": "tool_calls",
       "required": [
-        {"tool": "Edit", "description": "必须使用 Edit 工具"}
+        {
+          "tool": "Read",
+          "params": {"file_path": {"match": "contains", "value": "logs/"}},
+          "description": "必须读取 logs 目录下的文件"
+        },
+        {
+          "tool": "Edit",
+          "params": {
+            "file_path": "config/database.yaml",
+            "new_string": {"match": "contains", "value": "timeout: 47000"}
+          },
+          "description": "必须修改 database.yaml 并设置正确的 timeout"
+        }
       ]
     }
   ]

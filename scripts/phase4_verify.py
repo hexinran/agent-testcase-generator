@@ -27,6 +27,7 @@ import subprocess
 import shutil
 import time
 import signal
+import re
 from pathlib import Path
 from datetime import datetime
 from typing import Tuple, List, Dict, Any
@@ -285,6 +286,42 @@ def execute_reference_solution(work_dir: Path, reference_solution: list) -> List
 # Grader 验证
 # ============================================================
 
+def match_param_value(actual_value, match_spec) -> bool:
+    """
+    检查参数值是否匹配规范
+
+    Args:
+        actual_value: 实际的参数值
+        match_spec: 匹配规范，可以是：
+            - 字符串：等同于 {"match": "exact", "value": "..."}
+            - dict：{"match": "exact|contains|regex|any", "value": "..."}
+
+    Returns:
+        是否匹配
+    """
+    if isinstance(match_spec, str):
+        # 简化写法：字符串默认为精确匹配
+        return str(actual_value) == match_spec
+
+    match_type = match_spec.get('match', 'exact')
+    expected_value = match_spec.get('value', '')
+    actual_str = str(actual_value) if actual_value is not None else ''
+
+    if match_type == 'exact':
+        return actual_str == expected_value
+    elif match_type == 'contains':
+        return expected_value in actual_str
+    elif match_type == 'regex':
+        try:
+            return bool(re.search(expected_value, actual_str))
+        except re.error:
+            return False
+    elif match_type == 'any':
+        return True  # 不检查参数值
+    else:
+        return False
+
+
 class CheckResult:
     """单个检查的结果"""
     def __init__(self, check_type: str, passed: bool, message: str, description: str = ""):
@@ -352,13 +389,40 @@ def verify_graders(case_data: dict, work_dir: Path, trajectory: List[Dict]) -> G
 
         elif grader_type == 'tool_calls':
             required = grader.get('required', [])
-            tools_used = set(step.get('tool', '') for step in trajectory)
 
             all_verified = True
             for req in required:
                 tool = req.get('tool', '')
+                params_spec = req.get('params', {})
                 desc = req.get('description', '')
-                verified = tool in tools_used
+
+                verified = False
+                matched_step = None
+
+                for step in trajectory:
+                    if step.get('tool') != tool:
+                        continue
+
+                    # 如果没有参数要求，只要工具匹配就通过（向后兼容）
+                    if not params_spec:
+                        verified = True
+                        matched_step = step
+                        break
+
+                    # 检查每个参数是否匹配
+                    step_input = step.get('input', {})
+                    all_params_match = True
+
+                    for param_name, match_spec in params_spec.items():
+                        actual_value = step_input.get(param_name)
+                        if not match_param_value(actual_value, match_spec):
+                            all_params_match = False
+                            break
+
+                    if all_params_match:
+                        verified = True
+                        matched_step = step
+                        break
 
                 if not verified:
                     all_verified = False
@@ -366,7 +430,9 @@ def verify_graders(case_data: dict, work_dir: Path, trajectory: List[Dict]) -> G
                 result.tool_calls_details.append({
                     'tool': tool,
                     'description': desc,
-                    'verified': verified
+                    'verified': verified,
+                    'params_spec': params_spec if params_spec else None,
+                    'matched_step': matched_step.get('step') if matched_step else None
                 })
 
             result.tool_calls_verified = all_verified

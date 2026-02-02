@@ -120,13 +120,86 @@ Grader 用于验证 Agent 是否正确完成了任务。相比旧版 `golden_che
 
 ### 2. tool_calls（工具调用检查）
 
-验证 Agent 是否使用了特定工具。
+验证 Agent 是否使用了特定工具，支持参数匹配验证。
+
+#### 基础格式（只验证工具使用）
 
 ```json
 {
   "type": "tool_calls",
   "required": [
     {"tool": "Edit", "description": "必须使用 Edit 工具"}
+  ]
+}
+```
+
+#### 带参数验证的格式
+
+```json
+{
+  "type": "tool_calls",
+  "required": [
+    {
+      "tool": "Edit",
+      "params": {
+        "file_path": "config/database.yaml",
+        "new_string": {
+          "match": "contains",
+          "value": "timeout: 47000"
+        }
+      },
+      "description": "必须修改 database.yaml 并设置正确的 timeout"
+    }
+  ]
+}
+```
+
+#### 参数匹配方式
+
+| match 类型 | 含义 | 示例 |
+|-----------|------|------|
+| `exact`（默认） | 参数值必须完全相等 | `"file_path": "config/db.yaml"` |
+| `contains` | 参数值包含指定字符串 | `{"match": "contains", "value": "logs/"}` |
+| `regex` | 参数值匹配正则表达式 | `{"match": "regex", "value": "timeout\|error"}` |
+| `any` | 不检查参数值 | `{"match": "any"}` |
+
+#### 简化写法
+
+```json
+// 字符串值默认为 exact 匹配
+"file_path": "config/database.yaml"
+// 等同于
+"file_path": {"match": "exact", "value": "config/database.yaml"}
+```
+
+#### 完整示例
+
+```json
+{
+  "type": "tool_calls",
+  "required": [
+    {
+      "tool": "Read",
+      "params": {
+        "file_path": {"match": "contains", "value": "logs/"}
+      },
+      "description": "必须读取 logs 目录下的文件"
+    },
+    {
+      "tool": "Grep",
+      "params": {
+        "pattern": {"match": "regex", "value": "timeout|error"}
+      },
+      "description": "必须搜索 timeout 或 error"
+    },
+    {
+      "tool": "Edit",
+      "params": {
+        "file_path": "config/database.yaml",
+        "new_string": {"match": "contains", "value": "timeout: 47000"}
+      },
+      "description": "必须修改 database.yaml 并设置正确的 timeout"
+    }
   ]
 }
 ```
