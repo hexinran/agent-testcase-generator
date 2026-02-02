@@ -351,16 +351,9 @@ config/timeout.yaml
 
 ### 快速参考
 
-| 难度 | Golden Action | 环境文件数 | 信息分散 | 干扰项 |
-|------|---------------|-----------|---------|--------|
-| D2 | 1-2步 | 3-5个 | 单文件 | 无 |
-| D3 | 3-4步 | 8-12个 | 1-2 个文件 | 1-2 个 |
-| D4 | 5-6步 | 12-15个 | 3+ 个文件 | 3-5 个 |
-| D5 | 7-8步 | 15-20个 | 4+ 个文件 | 5-8 个 |
-| D6 | 9-10步 | 20-25个 | 5+ 个文件 | 8-12 个 |
-| D7 | 11-15步 | 25-35个 | 6+ 个文件 | 12+ 个 |
+详见：`~/.claude/skills/agent-testcase-generator/reference/difficulty_guide.md`
 
-详细说明见：`~/.claude/skills/agent-testcase-generator/reference/difficulty_guide.md`
+**要点**：难度由 Golden Action 步数、环境文件数、信息分散度、干扰项数量共同决定。
 
 ---
 

@@ -69,16 +69,9 @@ rm -rf /tmp/ref_project
 
 ### 文件数量要求
 
-根据难度创建足够数量的文件：
+根据难度创建足够数量的文件，详见 `~/.claude/skills/agent-testcase-generator/reference/difficulty_guide.md`
 
-| 难度 | 环境文件数 | 说明 |
-|------|-----------|------|
-| D2 | 3-5个 | 简单场景，文件少 |
-| D3 | 8-12个 | 基础项目结构 |
-| D4 | 12-15个 | 完整项目结构 |
-| D5 | 15-20个 | 复杂项目结构 |
-| D6 | 20-25个 | 大型项目 |
-| D7 | 25-35个 | 超大型项目或多子系统 |
+**简要参考**：D2: 3-5个, D3: 8-12个, D4: 12-15个, D5: 15-20个, D6: 20-25个, D7: 25-35个
 
 ### environment 字段格式
 
@@ -437,14 +430,9 @@ Read ~/.claude/skills/agent-testcase-generator/reference/grader_spec.md
 
 #### 原则 1：长度符合难度要求
 
-| 难度 | Golden Action 步数 |
-|------|-------------------|
-| D2 | 1-2步 |
-| D3 | 3-4步 |
-| D4 | 5-6步 |
-| D5 | 7-8步 |
-| D6 | 9-10步 |
-| D7 | 11-15步 |
+详见 `~/.claude/skills/agent-testcase-generator/reference/difficulty_guide.md`
+
+**简要参考**：D2: 1-2步, D3: 3-4步, D4: 5-6步, D5: 7-8步, D6: 9-10步, D7: 11-15步
 
 #### 原则 2：最后一步必须使用目标工具
 
@@ -620,5 +608,5 @@ Read ~/.claude/skills/agent-testcase-generator/reference/output_format.md
 
 设计完成后，进入验证阶段：
 ```bash
-Read ~/.claude/skills/agent-testcase-generator/verification/self_test.md
+Read ~/.claude/skills/agent-testcase-generator/verification/workflow.md
 ```
