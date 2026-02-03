@@ -36,6 +36,8 @@ core/principles.md      # 核心原则（逆向、可验证、低hacking、信�
   ↓
 core/design_flow.md     # 设计流程（环境→Query→Grader→Golden Action→复杂化）
   ↓
+core/grader_basics.md   # Grader 基础（格式 + 参数匹配）
+  ↓
 core/output_format.md   # 输出格式（case.json 结构）
   ↓
 core/verify.md          # 验证流程（Phase 4/6 + 脚本用法）
@@ -53,7 +55,6 @@ core/verify.md          # 验证流程（Phase 4/6 + 脚本用法）
 
 ```
 graders/<类型>.md                # 遇到不熟悉的 check 类型时
-core/grader_basics.md            # Grader 基础格式
 ```
 
 ---
